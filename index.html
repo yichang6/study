@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>考前大冒險：雲端同步旗艦版</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+  <style>
+    * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+    .rpg-card { box-shadow: 0 6px 0 rgba(0,0,0,0.1); }
+    .rpg-btn { box-shadow: 0 4px 0 rgba(0,0,0,0.15); transition: all 0.1s ease; }
+    .rpg-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.15); }
+  </style>
+</head>
+<body class="bg-slate-900 h-screen w-screen overflow-hidden flex flex-col font-sans text-slate-800">
+  <div id="app" class="h-full flex flex-col bg-amber-50">
+
+    <!-- 頂部冒險者導航列（手機/電腦皆自適應） -->
+    <header class="h-16 bg-white px-4 md:px-6 border-b-4 border-amber-200 flex items-center justify-between shadow-sm z-30 shrink-0">
+      <div class="flex items-center space-x-2 md:space-x-3">
+        <!-- 點擊切換雲端同步帳號 -->
+        <div @click="promptHeroId" class="flex items-center space-x-1.5 bg-amber-100 py-1 px-2.5 rounded-xl border-2 border-amber-300 cursor-pointer">
+          <span class="text-2xl">{{ hero.avatar }}</span>
+          <div>
+            <div class="flex items-center space-x-1">
+              <span class="font-black text-xs md:text-sm text-amber-950">{{ hero.name }}</span>
+              <span class="text-[10px] bg-amber-500 text-white font-bold px-1 rounded">Lv.{{ hero.level }}</span>
+            </div>
+            <div class="text-[9px] text-gray-500 font-mono">{{ isCloudOnline ? '🟢 雲端已連線' : '🟡 本地離線模式' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 金幣與切換按鈕 -->
+      <div class="flex items-center space-x-1.5 md:space-x-3">
+        <div class="flex items-center bg-yellow-100 px-2.5 py-1 rounded-xl border border-yellow-300">
+          <span class="text-base mr-1">🪙</span>
+          <span class="font-black text-yellow-800 text-sm md:text-base">{{ hero.coins }}</span>
+        </div>
+
+        <button @click="currentView = 'map'" :class="currentView === 'map' ? 'bg-amber-500 text-white' : 'bg-white text-gray-700'" class="px-2.5 md:px-4 py-1.5 rounded-xl font-black text-xs md:text-sm border-2 border-amber-200 rpg-btn">🗺️ 地圖</button>
+        <button @click="currentView = 'hero'" :class="currentView === 'hero' ? 'bg-indigo-500 text-white' : 'bg-white text-gray-700'" class="px-2.5 md:px-4 py-1.5 rounded-xl font-black text-xs md:text-sm border-2 border-indigo-200 rpg-btn">🛡️ 裝備</button>
+        <button @click="currentView = 'shop'" :class="currentView === 'shop' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-700'" class="px-2.5 md:px-4 py-1.5 rounded-xl font-black text-xs md:text-sm border-2 border-emerald-200 rpg-btn">🏪 商店</button>
+      </div>
+    </header>
+
+    <!-- ==================== VIEW 1: 關卡冒險地圖 ==================== -->
+    <main v-if="currentView === 'map'" class="flex-1 p-4 md:p-8 overflow-y-auto bg-gradient-to-b from-sky-100 to-amber-50 flex flex-col items-center">
+      <div class="text-center mb-4 md:mb-6">
+        <h1 class="text-2xl md:text-3xl font-black text-amber-950">🌟 國小期末考・知識冒險島</h1>
+        <p class="text-xs md:text-sm font-bold text-amber-800 mt-1">跨裝置同步進度，隨時隨地開啟複習！</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-5xl w-full">
+        <div 
+          v-for="stage in stages" 
+          :key="stage.id"
+          @click="startStage(stage)"
+          :class="[
+            stage.unlocked ? 'cursor-pointer active:scale-95' : 'opacity-60 cursor-not-allowed filter grayscale',
+            'bg-white rounded-3xl p-4 md:p-5 border-4 border-amber-200 rpg-card flex flex-col items-center justify-between text-center relative'
+          ]"
+        >
+          <div class="absolute -top-3 right-3 bg-amber-400 text-white text-xs font-black px-2 py-0.5 rounded-full shadow">
+            {{ stage.stars > 0 ? '⭐'.repeat(stage.stars) : '挑戰中' }}
+          </div>
+          <div class="text-4xl md:text-5xl my-2">{{ stage.icon }}</div>
+          <div>
+            <span class="text-[11px] px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold">{{ stage.subject }}</span>
+            <h3 class="font-black text-base md:text-lg text-gray-800 mt-1">{{ stage.title }}</h3>
+            <p class="text-[11px] text-gray-500 mt-0.5">{{ stage.desc }}</p>
+          </div>
+          <button class="w-full mt-4 py-2 rounded-xl font-black text-xs md:text-sm text-white shadow-sm" :class="stage.unlocked ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-400'">
+            {{ stage.unlocked ? (stage.completed ? '重新挑戰' : '進入關卡') : '🔒 未解鎖' }}
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- ==================== VIEW 2: 答題戰鬥介面（RWD支援） ==================== -->
+    <main v-if="currentView === 'battle'" class="flex-1 p-3 md:p-6 flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-6 overflow-y-auto md:overflow-hidden relative">
+      <!-- 題目區（手機在上，平板/電腦在左） -->
+      <div class="w-full md:col-span-7 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 border-4 border-amber-200 flex flex-col justify-between shrink-0">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="px-2.5 py-0.5 bg-amber-100 text-amber-800 rounded-lg font-black text-xs">
+              {{ activeStage.subject }} · {{ activeStage.title }}
+            </span>
+            <span class="text-xs font-bold text-gray-500">第 {{ currentQIndex + 1 }} / {{ currentQuestions.length }} 題</span>
+          </div>
+          <h2 class="text-lg md:text-2xl font-bold text-gray-800 leading-snug tracking-wide mt-1">
+            {{ currentQ.question }}
+          </h2>
+        </div>
+
+        <div class="pt-3 border-t border-gray-100 flex items-center justify-between mt-4">
+          <button @click="showHint = !showHint" class="text-xs md:text-sm font-bold text-amber-600">
+            💡 {{ showHint ? currentQ.hint : '點我看小提示' }}
+          </button>
+          <button @click="toggleScratchpad" class="text-xs md:text-sm font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-200">
+            ✏️ {{ isScratchpadOpen ? '收起草稿' : '打開計算草稿紙' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 選項區（手機在下，平板/電腦在右） -->
+      <div class="w-full md:col-span-5 flex flex-col space-y-2 md:space-y-3 justify-center">
+        <div class="bg-indigo-900 rounded-xl p-2.5 flex items-center justify-between text-white border border-indigo-700 shadow-inner">
+          <div class="flex items-center space-x-2">
+            <span class="text-2xl">👾</span>
+            <div>
+              <div class="text-[10px] text-indigo-300">守護獸</div>
+              <div class="text-xs md:text-sm font-black">{{ activeStage.monsterName }}</div>
+            </div>
+          </div>
+          <span class="text-xs font-bold text-amber-400">🔥 連擊 x{{ combo }}</span>
+        </div>
+
+        <button
+          v-for="(opt, idx) in currentQ.options"
+          :key="idx"
+          @click="submitAnswer(idx)"
+          :disabled="isAnswered"
+          :class="getOptionClass(idx)"
+          class="w-full min-h-[58px] md:min-h-[68px] px-4 py-2.5 rounded-2xl font-bold text-base md:text-lg text-left transition-all border-4 flex items-center justify-between"
+        >
+          <span>{{ ['A', 'B', 'C', 'D'][idx] }}. {{ opt }}</span>
+          <span v-if="isAnswered && idx === currentQ.correctAnswer">⚡️ 正確</span>
+          <span v-if="isAnswered && selectedIdx === idx && idx !== currentQ.correctAnswer">❌ 錯誤</span>
+        </button>
+
+        <div v-if="isAnswered" class="pt-1">
+          <button @click="nextBattleStep" class="w-full py-3 md:py-4 bg-emerald-500 text-white font-black text-base md:text-lg rounded-2xl shadow-md active:scale-95 transition">
+            {{ currentQIndex === currentQuestions.length - 1 ? '🎉 通關並同步雲端紀錄！' : '下一題 ➜' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 手寫草稿畫布 (Overlay) -->
+      <div v-show="isScratchpadOpen" class="absolute inset-2 md:inset-y-6 md:right-6 md:w-7/12 bg-white/95 rounded-2xl shadow-2xl border-4 border-indigo-300 flex flex-col z-20 backdrop-blur-sm">
+        <div class="p-2 bg-indigo-50 flex items-center justify-between border-b border-indigo-100">
+          <span class="font-bold text-indigo-900 text-xs">📝 隨身手寫計算紙</span>
+          <div class="space-x-1">
+            <button @click="clearScratchpad" class="px-2 py-0.5 bg-rose-100 text-rose-700 text-xs font-bold rounded">清除</button>
+            <button @click="toggleScratchpad" class="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs font-bold rounded">關閉</button>
+          </div>
+        </div>
+        <canvas id="scratchpad-canvas" class="flex-1 w-full h-full"></canvas>
+      </div>
+    </main>
+
+    <!-- ==================== VIEW 3: 人物自訂 ==================== -->
+    <main v-if="currentView === 'hero'" class="flex-1 p-4 md:p-8 flex flex-col md:grid md:grid-cols-12 gap-4 md:gap-8 overflow-y-auto">
+      <div class="md:col-span-5 bg-white rounded-3xl p-5 border-4 border-indigo-200 rpg-card flex flex-col items-center text-center">
+        <h2 class="text-lg font-black text-indigo-950 mb-1">英雄個人檔案</h2>
+        <div class="w-48 h-48 rounded-full bg-indigo-50 border-4 border-indigo-100 flex flex-col items-center justify-center relative shadow-inner my-2">
+          <div class="absolute bottom-2 right-2 text-3xl">{{ hero.gear.pet?.icon || '🐾' }}</div>
+          <div class="absolute top-6 left-2 text-3xl transform -rotate-12">{{ hero.gear.weapon?.icon || '✊' }}</div>
+          <div class="text-3xl -mb-3 z-10">{{ hero.gear.head?.icon || '' }}</div>
+          <div class="text-6xl">{{ hero.avatar }}</div>
+        </div>
+        <button @click="changeBaseAvatar" class="w-full mt-2 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-xl text-xs border border-indigo-200">
+          🔄 更換頭像外觀
+        </button>
+      </div>
+
+      <div class="md:col-span-7 bg-white rounded-3xl p-5 border-4 border-amber-200 rpg-card flex flex-col">
+        <h3 class="text-lg font-black text-amber-950 mb-3">🎒 裝備背包</h3>
+        <div class="flex-1 border-2 border-dashed border-gray-200 rounded-xl p-3 flex flex-wrap gap-2 overflow-y-auto">
+          <div 
+            v-for="item in inventory" 
+            :key="item.id" 
+            @click="equipItem(item)" 
+            class="p-2.5 bg-slate-50 hover:bg-amber-100 rounded-xl border border-slate-200 cursor-pointer flex items-center space-x-2"
+          >
+            <span class="text-2xl">{{ item.icon }}</span>
+            <div class="text-left">
+              <div class="text-xs font-black">{{ item.name }}</div>
+              <div class="text-[10px] text-gray-500">{{ item.type }} · 戰力 +{{ item.power }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ==================== VIEW 4: 商城 ==================== -->
+    <main v-if="currentView === 'shop'" class="flex-1 p-4 md:p-8 overflow-y-auto bg-amber-50 flex flex-col items-center">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-w-4xl w-full">
+        <div v-for="item in shopItems" :key="item.id" class="bg-white rounded-3xl p-4 border-4 border-emerald-100 rpg-card flex flex-col items-center text-center justify-between">
+          <div class="text-4xl my-2">{{ item.icon }}</div>
+          <div>
+            <h3 class="font-black text-base text-gray-800">{{ item.name }}</h3>
+            <p class="text-xs text-gray-500">{{ item.desc }}</p>
+          </div>
+          <button 
+            @click="buyItem(item)" 
+            :disabled="hasItem(item) || hero.coins < item.price" 
+            class="w-full mt-3 py-2 rounded-xl font-bold text-xs" 
+            :class="hasItem(item) ? 'bg-gray-200 text-gray-400' : 'bg-emerald-500 text-white'"
+          >
+            {{ hasItem(item) ? '已持有' : '🪙 ' + item.price + ' 購買' }}
+          </button>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Firebase 模組載入 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    // 🔴【重要】請把您在 Firebase 複製的那 6 行貼在這裡取代：
+    const firebaseConfig = {
+      apiKey: "貼上你的API_KEY",
+      authDomain: "你的專案.firebaseapp.com",
+      projectId: "你的專案ID",
+      storageBucket: "你的專案.appspot.com",
+      messagingSenderId: "數字",
+      appId: "APP_ID"
+    };
+
+    let db = null;
+    let isCloudConfigured = false;
+    // 檢查是否有填入金鑰
+    if (firebaseConfig.apiKey !== "貼上你的API_KEY") {
+      try {
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        isCloudConfigured = true;
+      } catch (e) {
+        console.warn("Firebase 初始化失敗，使用離線模式:", e);
+      }
+    }
+
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+    createApp({
+      setup() {
+        const currentView = ref('map');
+        const isCloudOnline = ref(isCloudConfigured);
+        const heroId = ref(localStorage.getItem('HERO_SYNC_ID') || 'hero_alex');
+
+        const defaultHero = {
+          name: '知識冒險家',
+          avatar: '👦',
+          level: 1,
+          exp: 0,
+          coins: 100,
+          gear: { head: null, weapon: null, pet: null }
+        };
+
+        const hero = ref(JSON.parse(localStorage.getItem('STUDY_HERO')) || defaultHero);
+        const inventory = ref(JSON.parse(localStorage.getItem('STUDY_INVENTORY')) || [
+          { id: 'w1', name: '幸運 2B 鉛筆', type: '武器', icon: '✏️', power: 5 }
+        ]);
+
+        const shopItems = ref([
+          { id: 'h1', name: '學霸博士帽', type: '頭部', icon: '🎓', power: 15, price: 80, desc: '加強專注力' },
+          { id: 'w2', name: '智慧魔法杖', type: '武器', icon: '🪄', power: 25, price: 120, desc: '看穿難題破綻' },
+          { id: 'p1', name: '知識貓頭鷹', type: '寵物', icon: '🦉', power: 20, price: 100, desc: '陪伴學習' }
+        ]);
+
+        const stages = ref([
+          {
+            id: 1,
+            title: '角度與幾何之塔',
+            subject: '四年級 數學',
+            icon: '📐',
+            desc: '破解鐘面角度秘密',
+            monsterName: '石像鐘怪',
+            unlocked: true,
+            completed: false,
+            stars: 0,
+            questions: [
+              {
+                question: '鐘面上上午 9 點整時，時針和分針所夾的「較小角」是幾度？',
+                options: ['60 度', '90 度', '120 度', '180 度'],
+                correctAnswer: 1,
+                hint: '鐘面一圈 360 度共 12 大格，一格 30 度。9 點時相差 3 格。'
+              }
+            ]
+          },
+          {
+            id: 2,
+            title: '光與影子的試煉',
+            subject: '四年級 自然',
+            icon: '🌞',
+            desc: '光源與影子規律',
+            monsterName: '幻影黑霧',
+            unlocked: true,
+            completed: false,
+            stars: 0,
+            questions: [
+              {
+                question: '在太陽底下觀察竿影，影子朝向「西北方」，太陽在哪個方向？',
+                options: ['東北方', '東南方', '西南方', '正北方'],
+                correctAnswer: 1,
+                hint: '影子永遠在背對光源的相反方向。'
+              }
+            ]
+          }
+        ]);
+
+        // 雲端同步監聽 (Realtime Sync)
+        const setupCloudSync = () => {
+          if (!isCloudConfigured || !db) return;
+          const heroDocRef = doc(db, "heroes", heroId.value);
+          // 即時監聽雲端改動：平板改了，手機電腦立刻變！
+          onSnapshot(heroDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              hero.value = data.hero;
+              inventory.value = data.inventory || inventory.value;
+              localStorage.setItem('STUDY_HERO', JSON.stringify(hero.value));
+              localStorage.setItem('STUDY_INVENTORY', JSON.stringify(inventory.value));
+            }
+          });
+        };
+
+        const pushToCloud = async () => {
+          localStorage.setItem('STUDY_HERO', JSON.stringify(hero.value));
+          localStorage.setItem('STUDY_INVENTORY', JSON.stringify(inventory.value));
+          if (!isCloudConfigured || !db) return;
+          try {
+            await setDoc(doc(db, "heroes", heroId.value), {
+              hero: hero.value,
+              inventory: inventory.value,
+              updatedAt: new Date().toISOString()
+            });
+          } catch (e) {
+            console.error("雲端上傳失敗:", e);
+          }
+        };
+
+        const promptHeroId = () => {
+          const newId = prompt("請輸入孩子的【冒險者同步代碼】（不同裝置輸入相同代碼即可同步）:", heroId.value);
+          if (newId && newId !== heroId.value) {
+            heroId.value = newId.trim();
+            localStorage.setItem('HERO_SYNC_ID', heroId.value);
+            setupCloudSync();
+          }
+        };
+
+        // 戰鬥答題邏輯
+        const activeStage = ref(stages.value[0]);
+        const currentQuestions = ref([]);
+        const currentQIndex = ref(0);
+        const selectedIdx = ref(null);
+        const isAnswered = ref(false);
+        const combo = ref(0);
+        const showHint = ref(false);
+        const isScratchpadOpen = ref(false);
+        let pad = null;
+
+        const currentQ = computed(() => currentQuestions.value[currentQIndex.value] || {});
+
+        const startStage = (stage) => {
+          if (!stage.unlocked) return;
+          activeStage.value = stage;
+          currentQuestions.value = stage.questions;
+          currentQIndex.value = 0;
+          selectedIdx.value = null;
+          isAnswered.value = false;
+          combo.value = 0;
+          currentView.value = 'battle';
+        };
+
+        const submitAnswer = (idx) => {
+          if (isAnswered.value) return;
+          selectedIdx.value = idx;
+          isAnswered.value = true;
+          if (idx === currentQ.value.correctAnswer) {
+            combo.value++;
+            hero.value.coins += 10 + combo.value * 5;
+            hero.value.exp += 25;
+            hero.value.level = Math.floor(hero.value.exp / 100) + 1;
+          } else {
+            combo.value = 0;
+          }
+          pushToCloud();
+        };
+
+        const nextBattleStep = () => {
+          if (currentQIndex.value < currentQuestions.value.length - 1) {
+            currentQIndex.value++;
+            selectedIdx.value = null;
+            isAnswered.value = false;
+            showHint.value = false;
+            clearScratchpad();
+          } else {
+            activeStage.value.completed = true;
+            activeStage.value.stars = 3;
+            alert(`🎉 通關完成！所有成果已全自動同步至雲端！`);
+            pushToCloud();
+            currentView.value = 'map';
+          }
+        };
+
+        // 人物外觀切換與裝備
+        const avatars = ['👦', '👧', '🧙‍♂️', '🦸‍♀️', '🐱'];
+        const changeBaseAvatar = () => {
+          const idx = avatars.indexOf(hero.value.avatar);
+          hero.value.avatar = avatars[(idx + 1) % avatars.length];
+          pushToCloud();
+        };
+
+        const equipItem = (item) => {
+          if (item.type === '頭部') hero.value.gear.head = (hero.value.gear.head?.id === item.id) ? null : item;
+          if (item.type === '武器') hero.value.gear.weapon = (hero.value.gear.weapon?.id === item.id) ? null : item;
+          if (item.type === '寵物') hero.value.gear.pet = (hero.value.gear.pet?.id === item.id) ? null : item;
+          pushToCloud();
+        };
+
+        const hasItem = (item) => inventory.value.some(i => i.id === item.id);
+
+        const buyItem = (item) => {
+          if (hero.value.coins >= item.price && !hasItem(item)) {
+            hero.value.coins -= item.price;
+            inventory.value.push(item);
+            pushToCloud();
+          }
+        };
+
+        const getOptionClass = (idx) => {
+          if (!isAnswered.value) return 'bg-white border-amber-200 active:bg-amber-50';
+          if (idx === currentQ.value.correctAnswer) return 'bg-emerald-100 border-emerald-500 font-bold';
+          if (selectedIdx.value === idx) return 'bg-rose-100 border-rose-400';
+          return 'bg-gray-50 opacity-50';
+        };
+
+        const initScratchpad = () => {
+          const canvas = document.getElementById('scratchpad-canvas');
+          if (!canvas) return;
+          canvas.width = canvas.parentElement.clientWidth;
+          canvas.height = canvas.parentElement.clientHeight - 40;
+          pad = new SignaturePad(canvas, { penColor: '#1e40af', minWidth: 2, maxWidth: 4 });
+        };
+
+        const toggleScratchpad = () => {
+          isScratchpadOpen.value = !isScratchpadOpen.value;
+          if (isScratchpadOpen.value) nextTick(() => { if (!pad) initScratchpad(); });
+        };
+
+        const clearScratchpad = () => { if (pad) pad.clear(); };
+
+        onMounted(() => {
+          setupCloudSync();
+        });
+
+        return {
+          currentView, isCloudOnline, hero, inventory, shopItems, stages,
+          activeStage, currentQuestions, currentQIndex, currentQ,
+          selectedIdx, isAnswered, combo, showHint, isScratchpadOpen,
+          promptHeroId, startStage, submitAnswer, nextBattleStep,
+          changeBaseAvatar, equipItem, hasItem, buyItem,
+          toggleScratchpad, clearScratchpad, getOptionClass
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
